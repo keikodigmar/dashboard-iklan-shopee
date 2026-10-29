@@ -37,7 +37,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 <div class="row">
 <label class="btn p">Upload data iklan Shopee (.csv)<input id="fAds" type="file" accept=".csv" hidden></label>
 <select id="basis" aria-label="Dasar ROAS"><option value="total">ROAS total (Efektifitas Iklan)</option><option value="direct">ROAS langsung (GMV langsung)</option></select>
-<select id="tier" aria-label="Filter tier"><option value="">Semua tier</option><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option><option value="none">Tanpa benchmark</option></select>
+<select id="tier" aria-label="Filter tier"><option value="">Semua tier</option><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option><option value="motor">Motor</option><option value="lain">Setir &amp; lainnya</option><option value="none">Tanpa benchmark</option></select>
 <input id="q" type="search" placeholder="Cari nama iklan / SKU / varian">
 <button class="btn" id="exp">Ekspor CSV</button>
 </div>
@@ -46,7 +46,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 <label class="btn">Upload order (.xlsx)<input id="fOrd" type="file" accept=".xlsx" hidden></label>
 <label class="btn">Upload benchmark (.xlsx dari Google Sheets)<input id="fBen" type="file" accept=".xlsx" hidden></label>
 <button class="btn" id="rst">Reset ke data bawaan</button></div>
-<p style="color:var(--mut);margin:8px 0 0">Benchmark xlsx: tab dengan nama berisi Shopee + Silver / Warna / Deluxe / Ultimate, serta tab Armor All, dibaca otomatis (tab TikTok/Lazada diabaikan). Alternatif tempel isi tab (Ctrl+A, Ctrl+C di Google Sheets):</p>
+<p style="color:var(--mut);margin:8px 0 0">Benchmark xlsx: tab dengan nama berisi Shopee + Silver / Warna / Deluxe / Ultimate, serta tab Armor All, Semua Varian Motor, dan Produk Lain, dibaca otomatis (kolom Shopee saja; TikTok/Lazada diabaikan). Alternatif tempel isi tab (Ctrl+A, Ctrl+C di Google Sheets):</p>
 <div class="row" style="margin-top:6px"><select id="pt"><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option></select><button class="btn" id="pb">Simpan tempelan</button><span id="bst" style="color:var(--mut)"></span></div>
 <textarea id="pa" placeholder="Mobil&#9;SKU&#9;&#9;ROAS NO Profit&#9;ROAS 25% Profit ..."></textarea>
 </details></section>
@@ -62,7 +62,10 @@ const rp=n=>'Rp'+Math.round(n).toLocaleString('id-ID'),f1=n=>n.toFixed(1);
 const S={bench:ls('bench2')||DEFAULT_BENCH,sales:ls('sales')||DEFAULT_SALES,csv:ls('csv')||DEFAULT_ADS_CSV,manual:ls('manual')||{},basis:'total',sort:['biaya',-1],st:null,tier:'',q:'',rows:[]};
 const tierOf=s=>/^MBLKS/.test(s)?'silver':/^MBLKW/.test(s)?'warna':/^MBLK[DC]/.test(s)?'deluxe':/^MBLK[UB]/.test(s)?'ultimate':/^MBLKA-/.test(s)?'armor':'';
 const nt=s=>String(s).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim(),canon=s=>s.replace(/^MBLKC/,'MBLKD').replace(/^MBLKB/,'MBLKU').replace(/^MBLKA-[A-Z]/,'MBLKA-U');
-function find(sku,vn){const t=tierOf(sku),R=S.bench.tiers[t];if(!R)return null;const c=canon(sku),m=R.filter(r=>r.s&&r.s===c);
+function find(sku,vn,pn){const P0=nt(pn||'');
+if(/^MTR/.test(sku)){const R=S.bench.tiers.motor||[],g={S:'SILVER',W:'WARNA',C:'DELUXE',N:'DELUXE',D:'DELUXE',U:'ULTIMATE',B:'ULTIMATE',A:'ARMOR',T:'TRANSPARAN'}[sku[4]],z=nt(vn).split(' ').find(w=>/^(M|L|XL|XXL)$/.test(w))||((pn||'').match(/\((M|L|XL|XXL)\)/)||[])[1],r=R.find(r=>r.s==g+'|'+z);return r?{r,t:'motor',q:sku[4]=='B'?'partial':''}:null}
+if(/^STR/.test(sku)||/KANEBO|CHAMOIS/.test(P0)){const k=/^STRKS/.test(sku)?'STRKS':/^STRKD/.test(sku)?'STRKD':'KANEBO',r=(S.bench.tiers.lain||[]).find(r=>r.s==k);return r?{r,t:'lain',q:''}:null}
+const t=tierOf(sku),R=S.bench.tiers[t];if(!R)return null;const c=canon(sku),m=R.filter(r=>r.s&&r.s===c);
 if(m.length){const w=new Set(nt(vn).split(' ')),sc=r=>nt(r.n).split(' ').filter(z=>w.has(z)).length;m.sort((a,b)=>sc(b)-sc(a));return{r:m[0],t,q:m.length>1&&m.some(r=>r.t[0]!=m[0].t[0])?'ganda':''}}
 const G=R.filter(r=>!r.s);if(!G.length)return null;
 const P=vn.split(',')[0].split('/').map(p=>nt(p).split(' ').filter(z=>!/^(\d{4}|LAMA|BARU|DI|BAWAH|BWH|NON|HWS)$/.test(z)).join(' ')).filter(Boolean);let b=null,bs=0;
@@ -77,10 +80,10 @@ function ads(t){const R=csv(t),hi=R.findIndex(r=>r[0]=='Urutan');if(hi<0)throw '
 const H=R[hi],x=n=>H.indexOf(n),v=(r,n)=>parseFloat(r[x(n)])||0,p=R.find(r=>r[0]=='Periode');
 return{period:p?p[1]:'',rows:R.slice(hi+1).filter(r=>r[1]).map(r=>({nama:r[x('Nama Iklan')],kode:r[x('Kode Produk')],status:r[x('Status')],biaya:v(r,'Biaya'),omzet:v(r,'Omzet Penjualan'),lg:v(r,'Penjualan Langsung (GMV Langsung)'),terjual:v(r,'Produk Terjual')}))}}
 function calc(a){const key=a.nama.replace(/\s*\[\d+\]\s*$/,'').split(/\s+/).join(' '),vs=S.sales.products[key]||[],m=S.manual[key];let pk=null,rk=0;
-for(let i=0;i<vs.length;i++){const f=find(vs[i][0],vs[i][1]);if(f){pk={v:vs[i],t:f.r.t,bn:f.r.n,tier:f.t,q:f.q};rk=i;break}}
-const T=m||(pk&&pk.t)||null,roas=a.biaya>0?(S.basis=='total'?a.omzet:a.lg)/a.biaya:0;let lv=null;if(T&&a.biaya>0){lv=-1;T.forEach((y,i)=>{if(roas>=y)lv=i})}
+for(let i=0;i<vs.length;i++){const f=find(vs[i][0],vs[i][1],key);if(f){pk={v:vs[i],t:f.r.t,bn:f.r.n,tier:f.t,q:f.q};rk=i;break}}
+const T=m||(pk&&pk.t)||null,roas=a.biaya>0?(S.basis=='total'?a.omzet:a.lg)/a.biaya:0;let lv=null;if(T&&a.biaya>0){lv=-1;T.forEach((y,i)=>{if(y!==null&&roas>=y)lv=i})}
 const top=vs[0],notes=[];if(!vs.length)notes.push('Produk tidak ada di data order');else{if(rk>0&&!m)notes.push('Varian #1 tanpa benchmark, dipakai varian #'+(rk+1));if(vs[0][2]<5||(vs[1]&&vs[1][2]==vs[0][2]))notes.push('Data order tipis / seri, cek manual')}
-if(!T&&vs.length)notes.push('Belum ada benchmark untuk SKU ini');if(pk&&!m&&pk.q=='partial')notes.push('Nama mobil cocok sebagian dengan baris benchmark, cek manual');if(pk&&!m&&pk.q=='ganda')notes.push('SKU ganda di benchmark, dipilih yang namanya paling mirip');
+if(!T&&vs.length)notes.push('Belum ada benchmark untuk SKU ini');if(pk&&!m&&pk.q=='partial')notes.push('Pemetaan cocok sebagian dengan baris benchmark, cek manual');if(pk&&!m&&pk.q=='ganda')notes.push('SKU ganda di benchmark, dipilih yang namanya paling mirip');
 const v=pk?pk.v:top;return{...a,key,T,roas,lv,m:!!m,vname:v?v[1]:'-',sku:v?v[0]:'',bn:pk?pk.bn:'',qty:v?v[2]:0,tier:m?(pk?pk.tier:'manual'):pk?pk.tier:'none',notes}}
 function build(){const d=ads(S.csv);S.period=d.period;S.rows=d.rows.map(calc)}
 function view(){let r=S.rows.filter(x=>(!S.tier||x.tier==S.tier)&&(S.st===null||x.lv===S.st)&&(!S.q||(x.nama+x.sku+x.vname).toLowerCase().includes(S.q)));
@@ -92,9 +95,9 @@ const cnt={};all.forEach(x=>{const k=x.lv===null?'na':x.lv;cnt[k]=(cnt[k]||0)+1}
 $('#chips').innerHTML=[-1,0,1,2,3,4].filter(i=>cnt[i]).map(i=>`<button class="chip ${S.st===i?'':S.st===null?'':'off'}" style="background:${COL[i+1]}" data-s="${i}">${lab(i)}: ${cnt[i]}</button>`).join('')+(cnt.na?`<button class="chip ${S.st==='na'?'':S.st===null?'':'off'}" style="background:#7a8793" data-s="na">Tanpa benchmark / biaya 0: ${cnt.na}</button>`:'');
 const C=[['nama','Iklan'],['vname','Varian terlaris (order Sep)'],['biaya','Biaya','n'],['omzet','Omzet','n'],['roas','ROAS','n'],['lv','Posisi vs benchmark'],['','Target berikutnya']];
 $('#th').innerHTML=C.map(c=>`<th class="${c[2]||''}" ${c[0]?`data-k="${c[0]}"`:''}>${c[1]}${S.sort[0]==c[0]?(S.sort[1]>0?' ▲':' ▼'):''}</th>`).join('');
-const rows=view();$('#tb').innerHTML=rows.length?rows.map(x=>{const T=x.T,mx=T?Math.max(T[T.length-1]*1.12,x.roas*1.05):1,pos=y=>(y/mx*100)+'%';
-const lad=T?`<div class="lad"><u style="width:${pos(x.roas)};background:${COL[(x.lv===null?-1:x.lv)+1]}"></u>${T.map((y,i)=>`<i style="left:${pos(y)}" title="${esc(lab(i))}: ${y}"></i>`).join('')}</div>`:'';
-const nx=!T?'Isi benchmark manual':x.lv===null?'-':x.lv==T.length-1?'Tertinggi':`ROAS ${f1(T[x.lv+1])} (+${f1(T[x.lv+1]-x.roas)}) → ${lab(x.lv+1)}`;
+const rows=view();$('#tb').innerHTML=rows.length?rows.map(x=>{const T=x.T,mx=T?Math.max(Math.max(...T.filter(y=>y!==null))*1.12,x.roas*1.05):1,pos=y=>(y/mx*100)+'%';
+const lad=T?`<div class="lad"><u style="width:${pos(x.roas)};background:${COL[(x.lv===null?-1:x.lv)+1]}"></u>${T.map((y,i)=>y===null?'':`<i style="left:${pos(y)}" title="${esc(lab(i))}: ${y}"></i>`).join('')}</div>`:'';
+const nx=!T?'Isi benchmark manual':x.lv===null?'-':(j=>j<0?'Tertinggi':`ROAS ${f1(T[j])} (+${f1(T[j]-x.roas)}) → ${lab(j)}`)(T.findIndex((y,i)=>i>x.lv&&y!==null));
 return`<tr><td class="nm">${esc(x.nama.slice(0,110))}<small>${esc(x.kode)} · ${esc(x.status)}</small></td><td class="vr">${esc(x.vname)}<small>${esc(x.sku)} · ${x.qty} pcs · ${esc(x.tier)}${x.m?' · manual':''}</small>${x.bn?`<small>benchmark: ${esc(x.bn.slice(0,70))}</small>`:''}${x.notes.map(n=>`<span class="warn">⚠ ${esc(n)}</span>`).join('<br>')}</td><td class="n">${rp(x.biaya)}</td><td class="n">${rp(S.basis=='total'?x.omzet:x.lg)}</td><td class="n"><b>${f1(x.roas)}</b></td><td>${T&&x.lv!==null?`<span class="tag" style="background:${COL[x.lv+1]}">${esc(lab(x.lv))}</span>`:'<span class="tag" style="background:#7a8793">n/a</span>'}${lad}</td><td>${nx}<br><button class="btn" data-m="${esc(x.key)}" style="padding:2px 8px;font-size:12px;margin-top:4px">Atur benchmark</button></td></tr>`}).join(''):'<tr><td colspan="7" class="empty">Tidak ada iklan yang cocok dengan filter.</td></tr>'}
 function refresh(){try{build();render()}catch(e){alert(e)}}
 const rd=(f,b)=>new Promise(o=>{const r=new FileReader();r.onload=()=>o(r.result);b?r.readAsArrayBuffer(f):r.readAsText(f)});
@@ -107,8 +110,15 @@ function bench(R,tier){const hi=R.findIndex(r=>r.filter(c=>/roas/i.test(c)).leng
 H.forEach((c,i)=>{if(/roas/i.test(c)&&ri.length<5&&!ri.some(j=>String(H[j]).trim()==String(c).trim()))ri.push(i)});if(ri.length!=5)return 0;
 S.bench.levels=ri.map(i=>/no/i.test(H[i])?'Break-even':String(H[i]).replace(/roas|profit/ig,'').trim());
 const o=[];R.slice(hi+1).forEach(r=>{const v=ri.map(i=>parseFloat(r[i])),n=String(r[0]||'').trim();if(n&&v.every(z=>!isNaN(z)))o.push({n,s:si>=0?String(r[si]||'').trim():'',t:v})});S.bench.tiers[tier]=o;return o.length}
-$('#fBen').onchange=async e=>{const wb=XLSX.read(await rd(e.target.files[0],1));let m=[];S.bench.tiers={};wb.SheetNames.forEach(n=>{const t=/armor/i.test(n)?'armor':!/shopee/i.test(n)?'':/silver/i.test(n)?'silver':/warna/i.test(n)?'warna':/deluxe/i.test(n)?'deluxe':/ultimate/i.test(n)?'ultimate':'';if(t)m.push(t+': '+bench(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1}),t)+' baris')});
-if(!m.length)return alert('Tidak ada tab Shopee (Silver/Warna/Deluxe/Ultimate) atau Armor yang dikenali.');ls('bench2',S.bench);$('#bst').textContent=m.join(' · ');refresh()};
+function multi(R,kind){const hr=R.findIndex(r=>r.some(c=>/^shopee$/i.test(String(c).trim())));if(hr<0)return 0;const c0=R[hr].findIndex(c=>/^shopee$/i.test(String(c).trim())),L=R[hr+1]||[],sl=[];
+for(let i=c0;i<L.length&&/roas/i.test(L[i]);i++){const h=String(L[i]),k=/no/i.test(h)?0:/25/.test(h)?1:/50/.test(h)?2:/60/.test(h)?3:4;if(sl.includes(k))break;sl.push(k)}
+const o=[];let g=String(L[0]||'');R.slice(hr+2).forEach(r=>{const n=String(r[0]||'').trim();if(!n)return;const v=sl.map((k,i)=>parseFloat(r[c0+i]));if(!v.every(z=>!isNaN(z))){g=n;return}const t=[null,null,null,null,null];sl.forEach((k,i)=>t[k]=v[i]);
+if(kind=='motor'){const m=n.match(/(XXL|XL|L|M)\)?\s*$/i);o.push({n:g+' '+n,s:nt(g).replace(/^MOTOR /,'').replace(' 5','')+'|'+(m?m[1].toUpperCase():''),t})}
+else o.push({n,s:/setir standard/i.test(n)?'STRKS':/setir deluxe/i.test(n)?'STRKD':/kanebo/i.test(n)?'KANEBO':'',t})});S.bench.tiers[kind]=o;return o.length}
+function loadBench(wb){const m=[];S.bench.tiers={};wb.SheetNames.forEach(n=>{const R=()=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1});
+if(/motor/i.test(n))m.push('motor: '+multi(R(),'motor')+' baris');else if(/produk lain/i.test(n))m.push('lain: '+multi(R(),'lain')+' baris');
+else{const t=/armor/i.test(n)?'armor':!/shopee/i.test(n)?'':/silver/i.test(n)?'silver':/warna/i.test(n)?'warna':/deluxe/i.test(n)?'deluxe':/ultimate/i.test(n)?'ultimate':'';if(t)m.push(t+': '+bench(R(),t)+' baris')}});return m}
+$('#fBen').onchange=async e=>{try{const m=loadBench(XLSX.read(await rd(e.target.files[0],1)));if(!m.length)return alert('Tidak ada tab yang dikenali (Shopee Silver/Warna/Deluxe/Ultimate, Armor All, Semua Varian Motor, Produk Lain).');ls('bench2',S.bench);$('#bst').textContent=m.join(' · ');refresh()}catch(x){alert('Gagal membaca benchmark: '+x)}e.target.value=''};
 $('#pb').onclick=()=>{const R=$('#pa').value.split('\n').map(l=>l.split('\t')),t=$('#pt').value,n=bench(R,t);if(!n)return alert('Header ROAS (5 kolom) tidak ditemukan di tempelan.');ls('bench2',S.bench);$('#bst').textContent=t+': '+n+' SKU tersimpan';refresh()};
 $('#rst').onclick=()=>{if(confirm('Hapus semua data tersimpan di browser ini?')){['bench2','sales','csv','manual'].forEach(k=>localStorage.removeItem(k));location.reload()}};
 $('#basis').onchange=e=>{S.basis=e.target.value;refresh()};$('#tier').onchange=e=>{S.tier=e.target.value;render()};$('#q').oninput=e=>{S.q=e.target.value.toLowerCase();render()};
