@@ -37,17 +37,17 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 <div class="row">
 <label class="btn p">Upload data iklan Shopee (.csv)<input id="fAds" type="file" accept=".csv" hidden></label>
 <select id="basis" aria-label="Dasar ROAS"><option value="total">ROAS total (Efektifitas Iklan)</option><option value="direct">ROAS langsung (GMV langsung)</option></select>
-<select id="tier" aria-label="Filter tier"><option value="">Semua tier</option><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option><option value="motor">Motor</option><option value="lain">Setir &amp; lainnya</option><option value="none">Tanpa benchmark</option></select>
+<select id="tier" aria-label="Filter tier"><option value="">Semua tier</option><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option><option value="plastik">Plastik</option><option value="motor">Motor</option><option value="lain">Setir &amp; lainnya</option><option value="none">Tanpa benchmark</option></select>
 <input id="q" type="search" placeholder="Cari nama iklan / SKU / varian">
 <button class="btn" id="exp">Ekspor CSV</button>
 </div>
 <details style="margin-top:12px"><summary>Data order &amp; benchmark (opsional, untuk memperbarui)</summary>
 <div class="row" style="margin-top:10px">
 <label class="btn">Upload order (.xlsx)<input id="fOrd" type="file" accept=".xlsx" hidden></label>
-<label class="btn">Upload benchmark (.xlsx dari Google Sheets)<input id="fBen" type="file" accept=".xlsx" hidden></label>
+<label class="btn">Upload benchmark (.xlsx atau beberapa .csv)<input id="fBen" type="file" accept=".xlsx,.csv" multiple hidden></label>
 <button class="btn" id="rst">Reset ke data bawaan</button></div>
-<p style="color:var(--mut);margin:8px 0 0">Benchmark xlsx: tab dengan nama berisi Shopee + Silver / Warna / Deluxe / Ultimate, serta tab Armor All, Semua Varian Motor, dan Produk Lain, dibaca otomatis (kolom Shopee saja; TikTok/Lazada diabaikan). Alternatif tempel isi tab (Ctrl+A, Ctrl+C di Google Sheets):</p>
-<div class="row" style="margin-top:6px"><select id="pt"><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option></select><button class="btn" id="pb">Simpan tempelan</button><span id="bst" style="color:var(--mut)"></span></div>
+<p style="color:var(--mut);margin:8px 0 0">Benchmark: upload satu .xlsx (semua tab) atau pilih beberapa file .csv sekaligus (ekspor per tab). Hanya kolom Shopee yang dipakai; file TikTok/Lazada diabaikan otomatis. Alternatif tempel isi tab (Ctrl+A, Ctrl+C di Google Sheets):</p>
+<div class="row" style="margin-top:6px"><select id="pt"><option value="silver">Silver</option><option value="warna">Warna</option><option value="deluxe">Deluxe</option><option value="ultimate">Ultimate</option><option value="armor">Armor</option><option value="plastik">Plastik</option></select><button class="btn" id="pb">Simpan tempelan</button><span id="bst" style="color:var(--mut)"></span></div>
 <textarea id="pa" placeholder="Mobil&#9;SKU&#9;&#9;ROAS NO Profit&#9;ROAS 25% Profit ..."></textarea>
 </details></section>
 <div class="kpis" id="kpis"></div><div class="chips" id="chips"></div>
@@ -59,16 +59,17 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ls=(k,v)=>{try{return v===undefined?JSON.parse(localStorage.getItem(k)):localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 const rp=n=>'Rp'+Math.round(n).toLocaleString('id-ID'),f1=n=>n.toFixed(1);
+try{if(ls('ver')!==window.DATA_VERSION){localStorage.removeItem('bench2');localStorage.removeItem('sales');ls('ver',window.DATA_VERSION)}}catch(e){}
 const S={bench:ls('bench2')||DEFAULT_BENCH,sales:ls('sales')||DEFAULT_SALES,csv:ls('csv')||DEFAULT_ADS_CSV,manual:ls('manual')||{},basis:'total',sort:['biaya',-1],st:null,tier:'',q:'',rows:[]};
-const tierOf=s=>/^MBLKS/.test(s)?'silver':/^MBLKW/.test(s)?'warna':/^MBLK[DC]/.test(s)?'deluxe':/^MBLK[UB]/.test(s)?'ultimate':/^MBLKA-/.test(s)?'armor':'';
+const tierOf=s=>/^MBLKS/.test(s)?'silver':/^MBLKW/.test(s)?'warna':/^MBLK[DC]/.test(s)?'deluxe':/^MBLK[UB]/.test(s)?'ultimate':/^MBLKA-/.test(s)?'armor':/^MBLKT/.test(s)?'plastik':'';
 const nt=s=>String(s).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim(),canon=s=>s.replace(/^MBLKC/,'MBLKD').replace(/^MBLKB/,'MBLKU').replace(/^MBLKA-[A-Z]/,'MBLKA-U');
 function find(sku,vn,pn){const P0=nt(pn||'');
 if(/^MTR/.test(sku)){const R=S.bench.tiers.motor||[],g={S:'SILVER',W:'WARNA',C:'DELUXE',N:'DELUXE',D:'DELUXE',U:'ULTIMATE',B:'ULTIMATE',A:'ARMOR',T:'TRANSPARAN'}[sku[4]],z=nt(vn).split(' ').find(w=>/^(M|L|XL|XXL)$/.test(w))||((pn||'').match(/\((M|L|XL|XXL)\)/)||[])[1],r=R.find(r=>r.s==g+'|'+z);return r?{r,t:'motor',q:sku[4]=='B'?'partial':''}:null}
-if(/^STR/.test(sku)||/KANEBO|CHAMOIS/.test(P0)){const k=/^STRKS/.test(sku)?'STRKS':/^STRKD/.test(sku)?'STRKD':'KANEBO',r=(S.bench.tiers.lain||[]).find(r=>r.s==k);return r?{r,t:'lain',q:''}:null}
+if(/^STR/.test(sku)||/KANEBO|CHAMOIS|KARPET/.test(P0)){const k=/^STRKS/.test(sku)?'STRKS':/^STRKD/.test(sku)?'STRKD':/KARPET/.test(P0)?(/3 BARIS/.test(nt(vn))?'KARPET3':/2 BARIS/.test(nt(vn))?'KARPET2':'KARPETX'):'KANEBO',r=(S.bench.tiers.lain||[]).find(r=>r.s==k);return r?{r,t:'lain',q:''}:null}
 const t=tierOf(sku),R=S.bench.tiers[t];if(!R)return null;const c=canon(sku),m=R.filter(r=>r.s&&r.s===c);
 if(m.length){const w=new Set(nt(vn).split(' ')),sc=r=>nt(r.n).split(' ').filter(z=>w.has(z)).length;m.sort((a,b)=>sc(b)-sc(a));return{r:m[0],t,q:m.length>1&&m.some(r=>r.t[0]!=m[0].t[0])?'ganda':''}}
 const G=R.filter(r=>!r.s);if(!G.length)return null;
-const P=vn.split(',')[0].split('/').map(p=>nt(p).split(' ').filter(z=>!/^(\d{4}|LAMA|BARU|DI|BAWAH|BWH|NON|HWS)$/.test(z)).join(' ')).filter(Boolean);let b=null,bs=0;
+const P=vn.split(',')[0].split(' - ')[0].split('/').map(p=>nt(p).split(' ').filter(z=>!/^(\d{4}|LAMA|BARU|DI|BAWAH|BWH|NON|HWS)$/.test(z)).join(' ')).filter(Boolean);let b=null,bs=0;
 const X=(r,p)=>{r.i=r.i||r.n.split(/[,\/]/).map(nt).filter(Boolean);let x=0;r.i.forEach(i=>{x=Math.max(x,i==p?2:p.split(' ').every(z=>i.split(' ').includes(z))?1:0)});return x};
 G.forEach(r=>{const s=P.reduce((a,p)=>a+X(r,p),0);if(s>bs){bs=s;b=r}});if(!b)return null;
 const B=P.map(p=>{let k=null,v=0;G.forEach(r=>{const x=X(r,p);if(x>v){v=x;k=r}});return[k,v]});
@@ -114,11 +115,12 @@ function multi(R,kind){const hr=R.findIndex(r=>r.some(c=>/^shopee$/i.test(String
 for(let i=c0;i<L.length&&/roas/i.test(L[i]);i++){const h=String(L[i]),k=/no/i.test(h)?0:/25/.test(h)?1:/50/.test(h)?2:/60/.test(h)?3:4;if(sl.includes(k))break;sl.push(k)}
 const o=[];let g=String(L[0]||'');R.slice(hr+2).forEach(r=>{const n=String(r[0]||'').trim();if(!n)return;const v=sl.map((k,i)=>parseFloat(r[c0+i]));if(!v.every(z=>!isNaN(z))){g=n;return}const t=[null,null,null,null,null];sl.forEach((k,i)=>t[k]=v[i]);
 if(kind=='motor'){const m=n.match(/(XXL|XL|L|M)\)?\s*$/i);o.push({n:g+' '+n,s:nt(g).replace(/^MOTOR /,'').replace(' 5','')+'|'+(m?m[1].toUpperCase():''),t})}
-else o.push({n,s:/setir standard/i.test(n)?'STRKS':/setir deluxe/i.test(n)?'STRKD':/kanebo/i.test(n)?'KANEBO':'',t})});S.bench.tiers[kind]=o;return o.length}
-function loadBench(wb){const m=[];S.bench.tiers={};wb.SheetNames.forEach(n=>{const R=()=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1});
-if(/motor/i.test(n))m.push('motor: '+multi(R(),'motor')+' baris');else if(/produk lain/i.test(n))m.push('lain: '+multi(R(),'lain')+' baris');
-else{const t=/armor/i.test(n)?'armor':!/shopee/i.test(n)?'':/silver/i.test(n)?'silver':/warna/i.test(n)?'warna':/deluxe/i.test(n)?'deluxe':/ultimate/i.test(n)?'ultimate':'';if(t)m.push(t+': '+bench(R(),t)+' baris')}});return m}
-$('#fBen').onchange=async e=>{try{const m=loadBench(XLSX.read(await rd(e.target.files[0],1)));if(!m.length)return alert('Tidak ada tab yang dikenali (Shopee Silver/Warna/Deluxe/Ultimate, Armor All, Semua Varian Motor, Produk Lain).');ls('bench2',S.bench);$('#bst').textContent=m.join(' · ');refresh()}catch(x){alert('Gagal membaca benchmark: '+x)}e.target.value=''};
+else o.push({n,s:/setir standard/i.test(n)?'STRKS':/setir deluxe/i.test(n)?'STRKD':/kanebo/i.test(n)?'KANEBO':/karpet/i.test(n)?(/3 baris/i.test(n)?'KARPET3':/2 baris/i.test(n)?'KARPET2':'KARPETX'):'',t})});S.bench.tiers[kind]=o;return o.length}
+function loadBench(items){const m=[];items.forEach(({n,g})=>{const t=/motor/i.test(n)?'motor':/karpet|setir|kanebo|produk lain/i.test(n)?'lain':/armor/i.test(n)?'armor':/plastik/i.test(n)?'plastik':!/shopee/i.test(n)?'':/silver/i.test(n)?'silver':/warna/i.test(n)?'warna':/deluxe/i.test(n)?'deluxe':/ultimate/i.test(n)?'ultimate':'';
+if(t)m.push(t+': '+(t=='motor'||t=='lain'?multi(g(),t):bench(g(),t))+' baris')});return m}
+$('#fBen').onchange=async e=>{try{const it=[],J=(wb,n)=>({n,g:()=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1})});
+for(const f of e.target.files){if(/\.csv$/i.test(f.name)){const wb=XLSX.read(await rd(f),{type:'string'});it.push({n:f.name,g:J(wb,wb.SheetNames[0]).g})}else{const wb=XLSX.read(await rd(f,1));wb.SheetNames.forEach(n=>it.push(J(wb,n)))}}
+const m=loadBench(it);if(!m.length)return alert('Tidak ada file/tab yang dikenali. Nama harus memuat Shopee + Silver/Warna/Deluxe/Ultimate, atau Armor, Plastik, Motor, Karpet/Setir/Kanebo.');ls('bench2',S.bench);$('#bst').textContent=m.join(' · ');refresh()}catch(x){alert('Gagal membaca benchmark: '+x)}e.target.value=''};
 $('#pb').onclick=()=>{const R=$('#pa').value.split('\n').map(l=>l.split('\t')),t=$('#pt').value,n=bench(R,t);if(!n)return alert('Header ROAS (5 kolom) tidak ditemukan di tempelan.');ls('bench2',S.bench);$('#bst').textContent=t+': '+n+' SKU tersimpan';refresh()};
 $('#rst').onclick=()=>{if(confirm('Hapus semua data tersimpan di browser ini?')){['bench2','sales','csv','manual'].forEach(k=>localStorage.removeItem(k));location.reload()}};
 $('#basis').onchange=e=>{S.basis=e.target.value;refresh()};$('#tier').onchange=e=>{S.tier=e.target.value;render()};$('#q').oninput=e=>{S.q=e.target.value.toLowerCase();render()};
